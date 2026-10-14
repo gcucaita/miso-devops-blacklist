@@ -28,3 +28,10 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True
     }
+
+    # Autenticación con Flask-JWT-Extended: los endpoints validan un JWT
+    # firmado con esta clave (variable de entorno en Beanstalk).
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    JWT_TOKEN_LOCATION = ["headers"]
+    JWT_HEADER_NAME = "Authorization"
+    JWT_HEADER_TYPE = "Bearer"

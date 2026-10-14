@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "01740d08-b68a-521d-ad15-2732a7ca61cf",
     "name": "Blacklist Microservice · Entrega 1",
-    "description": "Pruebas del microservicio de lista negra desplegado en AWS Elastic Beanstalk (MISW4304).\n\n1. Importar esta colección y el environment `Blacklist · AWS`.\n2. En el environment, pegar el token en `api_token` (columna *Current value*; no se exporta).\n3. Ejecutar la colección completa con el Runner, en orden. Las peticiones generan emails únicos, así que se puede repetir cuantas veces se quiera.\n\nAutenticación: Bearer `{{api_token}}` heredado de la colección; los casos 401 lo sobrescriben.",
+    "description": "Pruebas del microservicio de lista negra desplegado en AWS Elastic Beanstalk (MISW4304).\n\n1. Importar esta colección y el environment `Blacklist · AWS`.\n2. Generar el JWT con `python scripts/generate_token.py` (usa la misma JWT_SECRET_KEY del entorno) y pegarlo en `jwt_token` (columna *Current value*; no se exporta).\n3. Ejecutar la colección completa con el Runner, en orden. Las peticiones generan emails únicos, así que se puede repetir cuantas veces se quiera.\n\nAutenticación: JWT (Flask-JWT-Extended) enviado como Bearer `{{jwt_token}}`, heredado de la colección; los casos 401 lo sobrescriben.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -10,7 +10,7 @@
     "bearer": [
       {
         "key": "token",
-        "value": "{{api_token}}",
+        "value": "{{jwt_token}}",
         "type": "string"
       }
     ]
@@ -21,8 +21,8 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "if (!pm.environment.get(\"api_token\")) {",
-          "  console.warn(\"api_token está vacío: las peticiones autenticadas devolverán 401.\");",
+          "if (!pm.environment.get(\"jwt_token\")) {",
+          "  console.warn(\"jwt_token está vacío: las peticiones autenticadas devolverán 401.\");",
           "}"
         ]
       }
@@ -836,7 +836,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Token {{api_token}}"
+                "value": "Token {{jwt_token}}"
               }
             ],
             "url": {
@@ -852,6 +852,47 @@
             "description": "Usa el token correcto pero sin el esquema Bearer.",
             "auth": {
               "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Mensaje de token ausente o inválido\", () => pm.expect(pm.response.json().error).to.match(/token/i));",
+                  "pm.test(\"Header WWW-Authenticate Bearer\", () => pm.expect(pm.response.headers.get(\"WWW-Authenticate\") || \"\").to.match(/^Bearer/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19 · GET JWT firmado con otra clave (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/blacklists/{{email_bloqueado}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "blacklists",
+                "{{email_bloqueado}}"
+              ]
+            },
+            "description": "JWT con formato válido pero firmado con una clave distinta: Flask-JWT-Extended debe rechazarlo.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdGFjYW50ZSIsInR5cGUiOiJhY2Nlc3MiLCJmcmVzaCI6ZmFsc2UsImp0aSI6ImZvcmdlZCIsImlhdCI6MTcwMDAwMDAwMCwibmJmIjoxNzAwMDAwMDAwfQ.wrJTtTNeAeEIUek5mm8CXmOTn2lg1i0Lb2HZ5z-J5bE",
+                  "type": "string"
+                }
+              ]
             }
           },
           "event": [

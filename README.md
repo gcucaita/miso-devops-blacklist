@@ -98,11 +98,11 @@ Crear un archivo `.env` utilizando como referencia `.env.example`.
 
 ```dotenv
 DATABASE_URL=postgresql+psycopg2://usuario:password@localhost:5432/blacklist_db
-API_TOKEN=replace-with-secure-token
+JWT_SECRET_KEY=replace-with-long-random-secret
 FLASK_DEBUG=false
 ```
 
-El token real puede generarse con:
+La clave `JWT_SECRET_KEY` firma y valida los JWT (Flask-JWT-Extended). Puede generarse con:
 
 ```powershell
 python -c "import secrets; print(secrets.token_urlsafe(48))"
@@ -134,13 +134,20 @@ La API estará disponible en:
 
 ## 8. Autenticación
 
-Los endpoints POST y GET requieren la cabecera:
+Los endpoints POST y GET están protegidos con **Flask-JWT-Extended** y requieren un JWT válido:
 
 ```http
-Authorization: Bearer <API_TOKEN>
+Authorization: Bearer <JWT>
 ```
 
-Si el token es inválido o no se proporciona, el servicio devuelve HTTP 401.
+El JWT se genera con la misma `JWT_SECRET_KEY` del entorno:
+
+```powershell
+$env:JWT_SECRET_KEY = "<clave del entorno>"
+python scripts/generate_token.py --identity postman-qa --days 30   # --days 0 = sin vencimiento
+```
+
+Si el token falta, está mal formado, expiró o fue firmado con otra clave, el servicio devuelve HTTP 401. Si el servicio no tiene `JWT_SECRET_KEY` configurada, devuelve HTTP 503.
 
 El endpoint `/health` no necesita token.
 
@@ -166,7 +173,7 @@ Configuración requerida:
 - Archivo `requirements.txt`.
 - Archivo `Procfile`.
 - Variable `DATABASE_URL`.
-- Variable `API_TOKEN`.
+- Variable `JWT_SECRET_KEY`.
 - Base de datos PostgreSQL inicializada.
 - Conectividad privada entre la aplicación y RDS.
 - Health check HTTP en `/health`.

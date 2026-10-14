@@ -1,43 +1,30 @@
-
-import os
-import hmac
-
 from functools import wraps
-from flask import request, current_app
+
+from flask import current_app
+from flask_jwt_extended import verify_jwt_in_request
+from flask_jwt_extended.exceptions import JWTExtendedException
+from jwt.exceptions import PyJWTError
+
+UNAUTHORIZED_BODY = {"error": "Token ausente o invalido."}
+UNAUTHORIZED_HEADERS = {"WWW-Authenticate": 'Bearer realm="blacklists"'}
 
 
 def require_bearer_token(func):
+    """Exige un JWT válido (Flask-JWT-Extended) en "Authorization: Bearer <jwt>".
+
+    Responde 401 si el token falta, está mal formado, expiró o fue firmado
+    con otra clave, y 503 si el servicio no tiene JWT_SECRET_KEY configurada.
+    """
     @wraps(func)
     def decorated(*args, **kwargs):
+        if not current_app.config.get("JWT_SECRET_KEY"):
+            current_app.logger.error("JWT_SECRET_KEY no está configurada.")
+            return {"error": "Servicio no configurado."}, 503
 
-        expected_token = os.getenv("API_TOKEN")
-
-        if not expected_token:
-            current_app.logger.error(
-                "API_TOKEN no está configurado."
-            )
-            return {
-                "error": "Servicio no configurado."
-            }, 503
-
-        authorization = request.headers.get(
-            "Authorization", ""
-        )
-
-        parts = authorization.split()
-
-        if (
-            len(parts) != 2
-            or parts[0].lower() != "bearer"
-            or not hmac.compare_digest(
-                parts[1], expected_token
-            )
-        ):
-            return {
-                "error": "Token ausente o invalido."
-            }, 401, {
-                "WWW-Authenticate": 'Bearer realm="blacklists"'
-            }
+        try:
+            verify_jwt_in_request()
+        except (JWTExtendedException, PyJWTError):
+            return UNAUTHORIZED_BODY, 401, UNAUTHORIZED_HEADERS
 
         return func(*args, **kwargs)
 

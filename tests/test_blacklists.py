@@ -239,3 +239,65 @@ def test_unsupported_media_type(client, auth_headers):
     )
 
     assert response.status_code == 415
+
+
+def test_token_firmado_con_otra_clave(client, valid_payload):
+    import jwt as pyjwt
+
+    forged = pyjwt.encode(
+        {"sub": "atacante", "type": "access", "fresh": False,
+         "jti": "x", "iat": 0, "nbf": 0},
+        "otra-clave-que-no-es-la-del-servicio-123456",
+        algorithm="HS256"
+    )
+
+    response = client.post(
+        "/blacklists",
+        json=valid_payload,
+        headers={"Authorization": f"Bearer {forged}"}
+    )
+
+    assert response.status_code == 401
+
+
+def test_token_expirado(client, app, valid_payload):
+    from datetime import timedelta
+    from flask_jwt_extended import create_access_token
+
+    with app.app_context():
+        expired = create_access_token(
+            identity="pytest",
+            expires_delta=timedelta(seconds=-10)
+        )
+
+    response = client.get(
+        "/blacklists/usuario@empresa.com",
+        headers={"Authorization": f"Bearer {expired}"}
+    )
+
+    assert response.status_code == 401
+
+
+def test_esquema_distinto_a_bearer(client, app):
+    from flask_jwt_extended import create_access_token
+
+    with app.app_context():
+        token = create_access_token(identity="pytest")
+
+    response = client.get(
+        "/blacklists/usuario@empresa.com",
+        headers={"Authorization": f"Token {token}"}
+    )
+
+    assert response.status_code == 401
+
+
+def test_sin_clave_configurada_responde_503(client, app, auth_headers):
+    app.config["JWT_SECRET_KEY"] = None
+
+    response = client.get(
+        "/blacklists/usuario@empresa.com",
+        headers=auth_headers
+    )
+
+    assert response.status_code == 503
