@@ -1,3 +1,4 @@
+
 from flask import Flask, jsonify
 from flask_restful import Api
 
@@ -11,10 +12,24 @@ def create_app():
 
     db.init_app(app)
 
-    # Registrar modelos en SQLAlchemy
     from app import models
 
+    from app.resources.blacklist_resource import (
+        BlacklistResource,
+        BlacklistQueryResource
+    )
+
     api = Api(app)
+
+    api.add_resource(
+        BlacklistResource,
+        "/blacklists"
+    )
+
+    api.add_resource(
+        BlacklistQueryResource,
+        "/blacklists/<string:email>"
+    )
 
     @app.route("/health", methods=["GET"])
     def health():
