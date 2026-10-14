@@ -1,27 +1,201 @@
 # MISO DevOps - Blacklist Microservice
 
-Microservicio REST para la gestión centralizada de
-listas negras de correos electrónicos.
+Microservicio REST desarrollado con Python y Flask para gestionar una lista negra global de correos electrónicos.
 
-## Tecnologías
-- Python
-- Flask
+**Proyecto académico:** DevOps: Agilizando el Despliegue Continuo de Aplicaciones  
+**Entrega:** 1 - Despliegue manual de un microservicio sobre PaaS
+
+## 1. Tecnologías
+
+- Python y Flask
 - Flask-RESTful
-- SQLAlchemy
+- Flask-SQLAlchemy
+- Flask-Marshmallow
 - PostgreSQL
+- Bearer Token estático
+- Pytest
+- Gunicorn
+- AWS Elastic Beanstalk
 
-## Endpoints
-- POST /blacklists
-- GET /blacklists/<email>
-- GET /health
+## 2. Funcionalidades
 
-## Ejecutar localmente
+### POST /blacklists
 
-1. Crear y activar un entorno virtual.
-2. Instalar dependencias:
-   pip install -r requirements.txt
-3. Ejecutar:
-   python application.py
+Registra un correo electrónico en la lista negra.
 
-## Estado
-En desarrollo.
+**Body JSON:**
+
+```json
+{
+  "email": "usuario@empresa.com",
+  "app_uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "blocked_reason": "Actividad sospechosa"
+}
+```
+
+El campo `blocked_reason` es opcional y admite máximo 255 caracteres.
+
+El sistema registra automáticamente la IP de origen y la fecha/hora de la solicitud.
+
+**Respuesta exitosa:** HTTP 201.  
+**Correo duplicado:** HTTP 409.  
+**Datos inválidos:** HTTP 400.
+
+### GET /blacklists/{email}
+
+Consulta si un correo está registrado en la lista negra global.
+
+**Ejemplo de respuesta:**
+
+```json
+{
+  "email": "usuario@empresa.com",
+  "is_blacklisted": true,
+  "blocked_reason": "Actividad sospechosa"
+}
+```
+
+**Respuesta exitosa:** HTTP 200.
+
+### GET /health
+
+Permite verificar que el proceso HTTP está disponible.
+
+No requiere autenticación y devuelve HTTP 200 cuando el endpoint responde correctamente. No verifica por sí mismo la conectividad de PostgreSQL.
+
+## 3. Requisitos
+
+- Python compatible con las dependencias utilizadas.
+- PostgreSQL.
+- Git.
+- Variables de entorno configuradas.
+
+## 4. Instalación en Windows
+
+Clonar el repositorio:
+
+```powershell
+git clone URL_DEL_REPOSITORIO
+cd miso-devops-blacklist
+```
+
+Crear el entorno virtual:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+Instalar dependencias:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+## 5. Variables de entorno
+
+Crear un archivo `.env` utilizando como referencia `.env.example`.
+
+```dotenv
+DATABASE_URL=postgresql+psycopg2://usuario:password@localhost:5432/blacklist_db
+API_TOKEN=replace-with-secure-token
+FLASK_DEBUG=false
+```
+
+El token real puede generarse con:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Nunca publicar credenciales reales en el repositorio.
+
+## 6. Base de datos
+
+Crear una base PostgreSQL llamada `blacklist_db`.
+
+Para inicializar las tablas en un entorno local nuevo:
+
+```powershell
+flask --app application:application init-db
+```
+
+El comando crea las tablas inexistentes a partir de los modelos SQLAlchemy. No reemplaza las migraciones cuando ya existe una base de datos con datos.
+
+## 7. Ejecución local
+
+```powershell
+python application.py
+```
+
+La API estará disponible en:
+
+`http://127.0.0.1:5000`
+
+## 8. Autenticación
+
+Los endpoints POST y GET requieren la cabecera:
+
+```http
+Authorization: Bearer <API_TOKEN>
+```
+
+Si el token es inválido o no se proporciona, el servicio devuelve HTTP 401.
+
+El endpoint `/health` no necesita token.
+
+## 9. Pruebas automatizadas
+
+Ejecutar:
+
+```powershell
+python -m pytest tests/ -v
+```
+
+Las pruebas utilizan SQLite temporal en memoria y no modifican la base de datos PostgreSQL.
+
+Adicionalmente, se recomienda verificar los endpoints contra PostgreSQL utilizando Postman.
+
+## 10. Despliegue manual en AWS
+
+La aplicación está preparada para ejecutarse en AWS Elastic Beanstalk con Gunicorn y PostgreSQL en AWS RDS.
+
+Configuración requerida:
+
+- Plataforma Python compatible.
+- Archivo `requirements.txt`.
+- Archivo `Procfile`.
+- Variable `DATABASE_URL`.
+- Variable `API_TOKEN`.
+- Base de datos PostgreSQL inicializada.
+- Conectividad privada entre la aplicación y RDS.
+- Health check HTTP en `/health`.
+
+El despliegue debe realizarse manualmente según el alcance de la primera entrega. No se implementa CI/CD en esta iteración.
+
+## 11. Estructura principal
+
+```text
+app/
+  models/
+  resources/
+  schemas/
+  services/
+  security/
+tests/
+application.py
+Procfile
+requirements.txt
+README.md
+```
+
+## 12. Consideraciones
+
+- Los emails son únicos dentro de la lista negra.
+- Los correos se normalizan a minúsculas para las búsquedas.
+- Los motivos tienen un máximo de 255 caracteres.
+- La fecha/hora se registra utilizando UTC.
+- El Bearer Token es estático, de acuerdo con lo permitido en el enunciado.
+- Las credenciales no deben almacenarse en GitHub.
+- La aplicación no incluye interfaz gráfica.
+- La disponibilidad del endpoint `/health` no implica necesariamente disponibilidad de la base de datos.
