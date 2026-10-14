@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Entorno virtual
+.venv/
+venv/
+
+# Variables y credenciales
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# Archivos locales
+*.db
+*.sqlite3
