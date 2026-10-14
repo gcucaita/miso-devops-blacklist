@@ -163,6 +163,41 @@ Las pruebas utilizan SQLite temporal en memoria y no modifican la base de datos 
 
 Adicionalmente, se recomienda verificar los endpoints contra PostgreSQL utilizando Postman.
 
+### 9.1 Pruebas con Postman contra AWS
+
+La carpeta `postman/` contiene la colección completa y el environment listo para ejecutar contra el entorno desplegado en Elastic Beanstalk:
+
+| Archivo | Contenido |
+|---|---|
+| `postman/blacklist.postman_collection.json` | Colección **Blacklist Microservice · Entrega 1**: 20 peticiones y 91 asserts (salud, registro 201/409, validaciones 400/415, autenticación 401 y consultas). |
+| `postman/blacklist.postman_environment.json` | Environment **Blacklist · AWS** con `base_url`, `jwt_token` y `app_uuid` ya configurados. |
+
+El environment incluye un JWT de pruebas (`sub: postman-qa`) firmado con la `JWT_SECRET_KEY` del entorno de AWS. **Vence el 13 de noviembre de 2026.** Se publica porque es un proyecto académico de pruebas; no reutilizar este esquema en un sistema real.
+
+**Desde Postman**
+
+1. *Import* → seleccionar los dos archivos de `postman/`. Si ya existía una versión anterior de la colección o del environment, eliminarla antes (la variable antigua se llamaba `api_token`).
+2. Arriba a la derecha, seleccionar el environment **Blacklist · AWS**.
+3. Clic derecho en la colección → *Run* → *Run Blacklist Microservice · Entrega 1*.
+4. Resultado esperado: todas las pruebas en *Passed* y 0 en *Failed*.
+
+**Desde la terminal (Newman)**
+
+```powershell
+npx newman run postman/blacklist.postman_collection.json -e postman/blacklist.postman_environment.json
+```
+
+**Si el token vence o se cambia la clave**
+
+Si las peticiones autenticadas responden 401, generar un token nuevo con la `JWT_SECRET_KEY` del entorno (Elastic Beanstalk → Configuración → Propiedades del entorno) y reemplazar el valor de `jwt_token`:
+
+```powershell
+$env:JWT_SECRET_KEY = "<valor de JWT_SECRET_KEY en Beanstalk>"
+python scripts/generate_token.py --identity postman-qa --days 30
+```
+
+Para probar contra la API local, cambiar `base_url` a `http://127.0.0.1:5000` y generar el token con la `JWT_SECRET_KEY` del archivo `.env`.
+
 ## 10. Despliegue manual en AWS
 
 La aplicación está preparada para ejecutarse en AWS Elastic Beanstalk con Gunicorn y PostgreSQL en AWS RDS.
