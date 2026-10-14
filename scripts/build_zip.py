@@ -29,6 +29,11 @@ reqs = (RAIZ / "requirements.txt").read_bytes()
 if reqs.startswith((b"\xff\xfe", b"\xfe\xff")):
     raise SystemExit("requirements.txt está en UTF-16: guárdalo en UTF-8 antes de empaquetar.")
 
+procfile = (RAIZ / "Procfile").read_bytes()
+if procfile.startswith(b"\xef\xbb\xbf") or b"\r" in procfile or not procfile.startswith(b"web:"):
+    raise SystemExit("Procfile inválido: debe empezar con 'web:' en la primera línea, sin BOM, "
+                     "sin líneas vacías arriba y con saltos de línea LF (Beanstalk no lo puede parsear).")
+
 dist = RAIZ / "dist"
 dist.mkdir(exist_ok=True)
 destino = dist / f"blacklist-{version}.zip"
