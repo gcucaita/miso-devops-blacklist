@@ -2,6 +2,7 @@
 from flask import request
 from flask_restful import Resource
 from marshmallow import ValidationError
+from app.security.auth import require_bearer_token
 
 from app.schemas.blacklist_schema import (
     BlacklistCreateSchema
@@ -14,6 +15,7 @@ from app.services.blacklist_service import (
 
 class BlacklistResource(Resource):
 
+    @require_bearer_token
     def post(self):
 
         if not request.is_json:
@@ -64,6 +66,7 @@ class BlacklistResource(Resource):
 
 class BlacklistQueryResource(Resource):
 
+    @require_bearer_token
     def get(self, email):
 
         schema = BlacklistCreateSchema(
