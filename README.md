@@ -173,6 +173,32 @@ Configuración requerida:
 
 El despliegue debe realizarse manualmente según el alcance de la primera entrega. No se implementa CI/CD en esta iteración.
 
+### 10.1 Generar el paquete de despliegue
+
+1. Cambiar la versión en `app/version.py` (por ejemplo `v1` → `v2`).
+2. Ejecutar desde la raíz del repositorio:
+
+```powershell
+python scripts/build_zip.py
+```
+
+3. Subir `dist/blacklist-<version>.zip` en Elastic Beanstalk con **Upload and deploy**.
+
+No usar *Enviar a → Carpeta comprimida* ni `Compress-Archive`: dejan los archivos dentro de una carpeta o con rutas `\` que Beanstalk no reconoce.
+
+### 10.2 Monitorear un despliegue
+
+`GET /health` devuelve la versión desplegada (`"version": "v2"`). Durante cada despliegue:
+
+```powershell
+pip install requests
+python scripts/monitor.py http://<url-del-entorno> rolling
+```
+
+Al detenerlo con Ctrl+C imprime un resumen (errores/caída y convivencia de versiones) y guarda un CSV con cada petición. Sirve como evidencia de la validación de cada estrategia de despliegue.
+
+`.ebextensions/01-health.config` configura el health check del balanceador en `/health`. La política de despliegue se cambia en la consola antes de cada despliegue y no se fija en `.ebextensions`.
+
 ## 11. Estructura principal
 
 ```text
@@ -187,6 +213,8 @@ application.py
 Procfile
 requirements.txt
 README.md
+.ebextensions/
+scripts/
 ```
 
 ## 12. Consideraciones

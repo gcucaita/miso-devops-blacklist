@@ -4,6 +4,7 @@ from flask_restful import Api
 
 from app.config import Config
 from app.extensions import db
+from app.version import APP_VERSION
 
 
 def create_app():
@@ -35,7 +36,8 @@ def create_app():
     def health():
         return jsonify({
             "status": "healthy",
-            "service": "blacklist-microservice"
+            "service": "blacklist-microservice",
+            "version": APP_VERSION
         }), 200
 
     @app.cli.command("init-db")

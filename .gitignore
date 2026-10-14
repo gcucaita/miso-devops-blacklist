@@ -19,3 +19,7 @@ venv/
 # Archivos locales
 *.db
 *.sqlite3
+
+# Paquetes de despliegue generados
+dist/
+*.zip
