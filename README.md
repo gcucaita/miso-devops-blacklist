@@ -98,11 +98,11 @@ Crear un archivo `.env` utilizando como referencia `.env.example`.
 
 ```dotenv
 DATABASE_URL=postgresql+psycopg2://usuario:password@localhost:5432/blacklist_db
-API_TOKEN=replace-with-secure-token
+JWT_SECRET_KEY=replace-with-long-random-secret
 FLASK_DEBUG=false
 ```
 
-El token real puede generarse con:
+La clave `JWT_SECRET_KEY` firma y valida los JWT (Flask-JWT-Extended). Puede generarse con:
 
 ```powershell
 python -c "import secrets; print(secrets.token_urlsafe(48))"
@@ -134,13 +134,20 @@ La API estará disponible en:
 
 ## 8. Autenticación
 
-Los endpoints POST y GET requieren la cabecera:
+Los endpoints POST y GET están protegidos con **Flask-JWT-Extended** y requieren un JWT válido:
 
 ```http
-Authorization: Bearer <API_TOKEN>
+Authorization: Bearer <JWT>
 ```
 
-Si el token es inválido o no se proporciona, el servicio devuelve HTTP 401.
+El JWT se genera con la misma `JWT_SECRET_KEY` del entorno:
+
+```powershell
+$env:JWT_SECRET_KEY = "<clave del entorno>"
+python scripts/generate_token.py --identity postman-qa --days 30   # --days 0 = sin vencimiento
+```
+
+Si el token falta, está mal formado, expiró o fue firmado con otra clave, el servicio devuelve HTTP 401. Si el servicio no tiene `JWT_SECRET_KEY` configurada, devuelve HTTP 503.
 
 El endpoint `/health` no necesita token.
 
@@ -156,6 +163,41 @@ Las pruebas utilizan SQLite temporal en memoria y no modifican la base de datos 
 
 Adicionalmente, se recomienda verificar los endpoints contra PostgreSQL utilizando Postman.
 
+### 9.1 Pruebas con Postman contra AWS
+
+La carpeta `postman/` contiene la colección completa y el environment listo para ejecutar contra el entorno desplegado en Elastic Beanstalk:
+
+| Archivo | Contenido |
+|---|---|
+| `postman/blacklist.postman_collection.json` | Colección **Blacklist Microservice · Entrega 1**: 20 peticiones y 91 asserts (salud, registro 201/409, validaciones 400/415, autenticación 401 y consultas). |
+| `postman/blacklist.postman_environment.json` | Environment **Blacklist · AWS** con `base_url`, `jwt_token` y `app_uuid` ya configurados. |
+
+El environment incluye un JWT de pruebas (`sub: postman-qa`) firmado con la `JWT_SECRET_KEY` del entorno de AWS. **Vence el 13 de noviembre de 2026.** Se publica porque es un proyecto académico de pruebas; no reutilizar este esquema en un sistema real.
+
+**Desde Postman**
+
+1. *Import* → seleccionar los dos archivos de `postman/`. Si ya existía una versión anterior de la colección o del environment, eliminarla antes (la variable antigua se llamaba `api_token`).
+2. Arriba a la derecha, seleccionar el environment **Blacklist · AWS**.
+3. Clic derecho en la colección → *Run* → *Run Blacklist Microservice · Entrega 1*.
+4. Resultado esperado: todas las pruebas en *Passed* y 0 en *Failed*.
+
+**Desde la terminal (Newman)**
+
+```powershell
+npx newman run postman/blacklist.postman_collection.json -e postman/blacklist.postman_environment.json
+```
+
+**Si el token vence o se cambia la clave**
+
+Si las peticiones autenticadas responden 401, generar un token nuevo con la `JWT_SECRET_KEY` del entorno (Elastic Beanstalk → Configuración → Propiedades del entorno) y reemplazar el valor de `jwt_token`:
+
+```powershell
+$env:JWT_SECRET_KEY = "<valor de JWT_SECRET_KEY en Beanstalk>"
+python scripts/generate_token.py --identity postman-qa --days 30
+```
+
+Para probar contra la API local, cambiar `base_url` a `http://127.0.0.1:5000` y generar el token con la `JWT_SECRET_KEY` del archivo `.env`.
+
 ## 10. Despliegue manual en AWS
 
 La aplicación está preparada para ejecutarse en AWS Elastic Beanstalk con Gunicorn y PostgreSQL en AWS RDS.
@@ -166,12 +208,38 @@ Configuración requerida:
 - Archivo `requirements.txt`.
 - Archivo `Procfile`.
 - Variable `DATABASE_URL`.
-- Variable `API_TOKEN`.
+- Variable `JWT_SECRET_KEY`.
 - Base de datos PostgreSQL inicializada.
 - Conectividad privada entre la aplicación y RDS.
 - Health check HTTP en `/health`.
 
 El despliegue debe realizarse manualmente según el alcance de la primera entrega. No se implementa CI/CD en esta iteración.
+
+### 10.1 Generar el paquete de despliegue
+
+1. Cambiar la versión en `app/version.py` (por ejemplo `v1` → `v2`).
+2. Ejecutar desde la raíz del repositorio:
+
+```powershell
+python scripts/build_zip.py
+```
+
+3. Subir `dist/blacklist-<version>.zip` en Elastic Beanstalk con **Upload and deploy**.
+
+No usar *Enviar a → Carpeta comprimida* ni `Compress-Archive`: dejan los archivos dentro de una carpeta o con rutas `\` que Beanstalk no reconoce.
+
+### 10.2 Monitorear un despliegue
+
+`GET /health` devuelve la versión desplegada (`"version": "v2"`). Durante cada despliegue:
+
+```powershell
+pip install requests
+python scripts/monitor.py http://<url-del-entorno> rolling
+```
+
+Al detenerlo con Ctrl+C imprime un resumen (errores/caída y convivencia de versiones) y guarda un CSV con cada petición. Sirve como evidencia de la validación de cada estrategia de despliegue.
+
+`.ebextensions/01-health.config` configura el health check del balanceador en `/health`. La política de despliegue se cambia en la consola antes de cada despliegue y no se fija en `.ebextensions`.
 
 ## 11. Estructura principal
 
@@ -187,6 +255,8 @@ application.py
 Procfile
 requirements.txt
 README.md
+.ebextensions/
+scripts/
 ```
 
 ## 12. Consideraciones

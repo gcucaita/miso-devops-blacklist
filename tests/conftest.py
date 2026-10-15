@@ -5,6 +5,8 @@ from app import create_app
 from app.config import Config
 from app.extensions import db
 
+TEST_JWT_SECRET = "clave-jwt-solo-para-pruebas-0123456789"
+
 
 @pytest.fixture
 def app(monkeypatch):
@@ -16,10 +18,11 @@ def app(monkeypatch):
         "sqlite:///:memory:"
     )
 
-    # Token exclusivo para pruebas
-    monkeypatch.setenv(
-        "API_TOKEN",
-        "test-token-devops-123"
+    # Clave JWT exclusiva para pruebas
+    monkeypatch.setattr(
+        Config,
+        "JWT_SECRET_KEY",
+        TEST_JWT_SECRET
     )
 
     application = create_app()
@@ -42,9 +45,12 @@ def client(app):
 
 
 @pytest.fixture
-def auth_headers():
+def auth_headers(app):
+    from flask_jwt_extended import create_access_token
+
+    token = create_access_token(identity="pytest")
     return {
-        "Authorization": "Bearer test-token-devops-123"
+        "Authorization": f"Bearer {token}"
     }
 
 
