@@ -1,16 +1,10 @@
-
+"""Pruebas unitarias del endpoint POST /blacklists."""
 import uuid
+
+import jwt as pyjwt
 
 from app.extensions import db
 from app.models.blacklist import Blacklist
-
-
-def test_health(client):
-    response = client.get("/health")
-
-    assert response.status_code == 200
-    assert response.json["status"] == "healthy"
-    assert "version" in response.json
 
 
 def test_create_blacklist(
@@ -57,38 +51,36 @@ def test_blacklist_persisted(
         assert record.created_at is not None
 
 
-def test_get_existing_email(
+def test_optional_reason(
     client, auth_headers, valid_payload
 ):
-    client.post(
+    del valid_payload["blocked_reason"]
+
+    response = client.post(
         "/blacklists",
         json=valid_payload,
         headers=auth_headers
     )
 
-    response = client.get(
-        "/blacklists/usuario@empresa.com",
-        headers=auth_headers
-    )
-
-    assert response.status_code == 200
-    assert response.json["is_blacklisted"] is True
-    assert response.json["blocked_reason"] == (
-        "Actividad sospechosa"
-    )
+    assert response.status_code == 201
+    assert response.json["data"]["blocked_reason"] is None
 
 
-def test_get_nonexistent_email(
-    client, auth_headers
+def test_email_se_normaliza_a_minusculas(
+    client, auth_headers, valid_payload
 ):
-    response = client.get(
-        "/blacklists/noexiste@empresa.com",
+    valid_payload["email"] = "  Usuario@EMPRESA.com "
+
+    response = client.post(
+        "/blacklists",
+        json=valid_payload,
         headers=auth_headers
     )
 
-    assert response.status_code == 200
-    assert response.json["is_blacklisted"] is False
-    assert response.json["blocked_reason"] is None
+    assert response.status_code == 201
+    assert response.json["data"]["email"] == (
+        "usuario@empresa.com"
+    )
 
 
 def test_duplicate_email(
@@ -108,6 +100,25 @@ def test_duplicate_email(
 
     assert first.status_code == 201
     assert second.status_code == 409
+
+
+def test_duplicate_email_en_mayusculas(
+    client, auth_headers, valid_payload
+):
+    client.post(
+        "/blacklists",
+        json=valid_payload,
+        headers=auth_headers
+    )
+
+    valid_payload["email"] = "USUARIO@EMPRESA.COM"
+    response = client.post(
+        "/blacklists",
+        json=valid_payload,
+        headers=auth_headers
+    )
+
+    assert response.status_code == 409
 
 
 def test_invalid_email(
@@ -166,64 +177,21 @@ def test_reason_too_long(
     assert response.status_code == 400
 
 
-def test_optional_reason(
-    client, auth_headers, valid_payload
-):
-    del valid_payload["blocked_reason"]
-
+def test_malformed_json(client, auth_headers):
     response = client.post(
         "/blacklists",
-        json=valid_payload,
-        headers=auth_headers
-    )
-
-    assert response.status_code == 201
-    assert response.json["data"]["blocked_reason"] is None
-
-
-def test_post_without_token(client, valid_payload):
-    response = client.post(
-        "/blacklists",
-        json=valid_payload
-    )
-
-    assert response.status_code == 401
-
-
-def test_get_without_token(client):
-    response = client.get(
-        "/blacklists/usuario@empresa.com"
-    )
-
-    assert response.status_code == 401
-
-
-def test_invalid_token(client, valid_payload):
-    response = client.post(
-        "/blacklists",
-        json=valid_payload,
-        headers={
-            "Authorization": "Bearer wrong-token"
-        }
-    )
-
-    assert response.status_code == 401
-
-
-def test_invalid_get_email(client, auth_headers):
-    response = client.get(
-        "/blacklists/correo-invalido",
+        data='{"email":',
+        content_type="application/json",
         headers=auth_headers
     )
 
     assert response.status_code == 400
 
 
-def test_malformed_json(client, auth_headers):
+def test_body_que_no_es_objeto(client, auth_headers):
     response = client.post(
         "/blacklists",
-        data='{"email":',
-        content_type="application/json",
+        json=["usuario@empresa.com"],
         headers=auth_headers
     )
 
@@ -241,9 +209,28 @@ def test_unsupported_media_type(client, auth_headers):
     assert response.status_code == 415
 
 
-def test_token_firmado_con_otra_clave(client, valid_payload):
-    import jwt as pyjwt
+def test_post_without_token(client, valid_payload):
+    response = client.post(
+        "/blacklists",
+        json=valid_payload
+    )
 
+    assert response.status_code == 401
+
+
+def test_invalid_token(client, valid_payload):
+    response = client.post(
+        "/blacklists",
+        json=valid_payload,
+        headers={
+            "Authorization": "Bearer wrong-token"
+        }
+    )
+
+    assert response.status_code == 401
+
+
+def test_token_firmado_con_otra_clave(client, valid_payload):
     forged = pyjwt.encode(
         {"sub": "atacante", "type": "access", "fresh": False,
          "jti": "x", "iat": 0, "nbf": 0},
@@ -258,46 +245,3 @@ def test_token_firmado_con_otra_clave(client, valid_payload):
     )
 
     assert response.status_code == 401
-
-
-def test_token_expirado(client, app, valid_payload):
-    from datetime import timedelta
-    from flask_jwt_extended import create_access_token
-
-    with app.app_context():
-        expired = create_access_token(
-            identity="pytest",
-            expires_delta=timedelta(seconds=-10)
-        )
-
-    response = client.get(
-        "/blacklists/usuario@empresa.com",
-        headers={"Authorization": f"Bearer {expired}"}
-    )
-
-    assert response.status_code == 401
-
-
-def test_esquema_distinto_a_bearer(client, app):
-    from flask_jwt_extended import create_access_token
-
-    with app.app_context():
-        token = create_access_token(identity="pytest")
-
-    response = client.get(
-        "/blacklists/usuario@empresa.com",
-        headers={"Authorization": f"Token {token}"}
-    )
-
-    assert response.status_code == 401
-
-
-def test_sin_clave_configurada_responde_503(client, app, auth_headers):
-    app.config["JWT_SECRET_KEY"] = None
-
-    response = client.get(
-        "/blacklists/usuario@empresa.com",
-        headers=auth_headers
-    )
-
-    assert response.status_code == 503

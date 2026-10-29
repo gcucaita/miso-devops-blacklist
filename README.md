@@ -161,6 +161,14 @@ python -m pytest tests/ -v
 
 Las pruebas utilizan SQLite temporal en memoria y no modifican la base de datos PostgreSQL.
 
+Hay al menos un escenario por endpoint, en un archivo por endpoint:
+
+| Archivo | Endpoint | Escenarios |
+|---|---|---|
+| `tests/test_health.py` | `GET /health` | 200, versión desplegada, no requiere token |
+| `tests/test_post_blacklists.py` | `POST /blacklists` | 201, persistencia, normalización, 409, 400, 415, 401 |
+| `tests/test_get_blacklists.py` | `GET /blacklists/{email}` | 200 true/false, mayúsculas, 400, 401, 503 |
+
 Adicionalmente, se recomienda verificar los endpoints contra PostgreSQL utilizando Postman.
 
 ### 9.1 Pruebas con Postman contra AWS
@@ -241,7 +249,32 @@ Al detenerlo con Ctrl+C imprime un resumen (errores/caída y convivencia de vers
 
 `.ebextensions/01-health.config` configura el health check del balanceador en `/health`. La política de despliegue se cambia en la consola antes de cada despliegue y no se fija en `.ebextensions`.
 
-## 11. Estructura principal
+## 11. Integración continua (AWS CodeBuild)
+
+`buildspec.yml` define el build que ejecuta AWS CodeBuild en cada commit:
+
+| Fase | Qué hace |
+|---|---|
+| `install` | Python 3.12 y `pip install -r requirements.txt` |
+| `build` | `pytest` con reporte JUnit (`reports/junit.xml`). Si una prueba falla, el build termina en **FAILED** y no hay artefacto. |
+| `post_build` | `scripts/build_zip.py` genera el paquete y se descomprime en `package/` |
+| `reports` | Publica los resultados de pytest en la pestaña *Reports* de CodeBuild |
+| `artifacts` | Publica el contenido de `package/` (application.py, Procfile, requirements.txt, app/, .ebextensions/) |
+
+El artefacto solo se **genera**; no se despliega (sin CD en esta entrega).
+
+Las pruebas no necesitan PostgreSQL ni variables de entorno: usan SQLite en memoria y una clave JWT propia de pruebas.
+
+Para reproducir el build localmente:
+
+```powershell
+python -m pytest tests/ -v --junitxml=reports/junit.xml
+python scripts/build_zip.py
+```
+
+`.gitattributes` fuerza saltos de línea LF en `Procfile`, `buildspec.yml` y `.ebextensions/`, para que un clon en Windows no los convierta a CRLF.
+
+## 12. Estructura principal
 
 ```text
 app/
@@ -254,12 +287,13 @@ tests/
 application.py
 Procfile
 requirements.txt
+buildspec.yml
 README.md
 .ebextensions/
 scripts/
 ```
 
-## 12. Consideraciones
+## 13. Consideraciones
 
 - Los emails son únicos dentro de la lista negra.
 - Los correos se normalizan a minúsculas para las búsquedas.

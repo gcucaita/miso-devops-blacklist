@@ -1,0 +1,7 @@
+# Archivos que se ejecutan en Linux (Beanstalk / CodeBuild): siempre con LF.
+# Con core.autocrlf=true, Git en Windows los entregaba con CRLF y Beanstalk
+# no podía parsear el Procfile.
+Procfile        text eol=lf
+buildspec.yml   text eol=lf
+.ebextensions/** text eol=lf
+*.sh            text eol=lf

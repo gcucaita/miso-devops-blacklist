@@ -23,3 +23,8 @@ venv/
 # Paquetes de despliegue generados
 dist/
 *.zip
+
+# Salidas del build (CodeBuild) y del monitor de despliegues
+package/
+reports/
+monitor_*.csv
