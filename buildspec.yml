@@ -1,0 +1,58 @@
+# Integración continua en AWS CodeBuild (Entrega 2).
+#
+# 1. Instala dependencias.
+# 2. Ejecuta las pruebas unitarias (SQLite en memoria: no requiere PostgreSQL).
+#    Si alguna falla, el build termina en FAILED y no se genera artefacto.
+# 3. Genera el artefacto desplegable con scripts/build_zip.py (el mismo
+#    paquete que se sube a Beanstalk). Solo se genera: NO se despliega (sin CD).
+version: 0.2
+
+env:
+  variables:
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    PIP_ROOT_USER_ACTION: "ignore"
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - python --version
+      - pip install -r requirements.txt
+
+  build:
+    on-failure: ABORT
+    commands:
+      - echo "Ejecutando pruebas unitarias..."
+      - mkdir -p reports
+      - python -m pytest tests/ -v --junitxml=reports/junit.xml
+
+  post_build:
+    commands:
+      # post_build también corre cuando build falla; solo empaquetamos si las pruebas pasaron.
+      - |
+        if [ "$CODEBUILD_BUILD_SUCCEEDING" != "1" ]; then
+          echo "Pruebas fallidas: no se genera el artefacto."
+          exit 1
+        fi
+      - python scripts/build_zip.py
+      # Se descomprime para que el artefacto que publica CodeBuild/CodePipeline
+      # tenga application.py, Procfile y .ebextensions/ en la raíz (listo para Beanstalk).
+      - python -m zipfile -e dist/blacklist-*.zip package/
+      - ls -la package
+
+reports:
+  pytest-reports:
+    base-directory: reports
+    files:
+      - junit.xml
+    file-format: JUNITXML
+
+artifacts:
+  base-directory: package
+  files:
+    - "**/*"
+
+cache:
+  paths:
+    - /root/.cache/pip/**/*
