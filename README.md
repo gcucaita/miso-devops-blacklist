@@ -303,3 +303,5 @@ scripts/
 - Las credenciales no deben almacenarse en GitHub.
 - La aplicación no incluye interfaz gráfica.
 - La disponibilidad del endpoint `/health` no implica necesariamente disponibilidad de la base de datos.
+
+Pipeline de CI: GitHub → AWS CodePipeline → AWS CodeBuild (pruebas + artefacto en S3).
