@@ -305,6 +305,3 @@ scripts/
 - La disponibilidad del endpoint `/health` no implica necesariamente disponibilidad de la base de datos.
 
 Pipeline de CI: GitHub → AWS CodePipeline → AWS CodeBuild (pruebas + artefacto en S3)
-
-
-Prueba
