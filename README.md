@@ -306,4 +306,4 @@ scripts/
 
 Pipeline de CI: GitHub → AWS CodePipeline → AWS CodeBuild (pruebas + artefacto en S3)
 
-# "Pipeline de CI activo con CodePipeline y CodeBuild."
+# "Pipeline de CI activo con CodePipeline y CodeBuild FUNCIONANDO CORRECTAMENTE ."
