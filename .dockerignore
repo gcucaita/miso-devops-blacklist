@@ -1,0 +1,9 @@
+.git
+tests
+postman
+scripts
+.ebextensions
+dist
+package
+reports
+*.md

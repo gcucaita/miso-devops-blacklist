@@ -1,14 +1,19 @@
-# Integración continua en AWS CodeBuild (Entrega 2).
+# Integración continua + entrega continua en AWS CodeBuild (Entrega 3).
 #
 # 1. Instala dependencias.
 # 2. Ejecuta las pruebas unitarias (SQLite en memoria: no requiere PostgreSQL).
-#    Si alguna falla, el build termina en FAILED y no se genera artefacto.
-# 3. Genera el artefacto desplegable con scripts/build_zip.py (el mismo
-#    paquete que se sube a Beanstalk). Solo se genera: NO se despliega (sin CD).
+#    Si alguna falla, el build termina en FAILED: no se construye ni publica imagen.
+# 3. Construye la imagen Docker y la publica en Amazon ECR.
+# 4. Genera imagedefinitions.json como artefacto para la etapa Deploy
+#    (Amazon ECS con despliegue azul/verde nativo y rollback automático).
+#
+# Requiere en el proyecto de CodeBuild: modo privilegiado (Docker) y permisos de ECR.
 version: 0.2
 
 env:
   variables:
+    AWS_ACCOUNT_ID: "945125987923"
+    IMAGE_REPO_NAME: "blacklist-api"
     PIP_DISABLE_PIP_VERSION_CHECK: "1"
     PIP_ROOT_USER_ACTION: "ignore"
 
@@ -20,26 +25,35 @@ phases:
       - python --version
       - pip install -r requirements.txt
 
+  pre_build:
+    commands:
+      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - echo "Imagen destino $REPOSITORY_URI:$IMAGE_TAG"
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
   build:
     on-failure: ABORT
     commands:
       - echo "Ejecutando pruebas unitarias..."
       - mkdir -p reports
       - python -m pytest tests/ -v --junitxml=reports/junit.xml
+      - echo "Construyendo imagen Docker..."
+      - docker build -t $REPOSITORY_URI:$IMAGE_TAG -t $REPOSITORY_URI:latest .
 
   post_build:
     commands:
-      # post_build también corre cuando build falla; solo empaquetamos si las pruebas pasaron.
+      # post_build también corre cuando build falla; solo publicamos si las pruebas pasaron.
       - |
         if [ "$CODEBUILD_BUILD_SUCCEEDING" != "1" ]; then
-          echo "Pruebas fallidas: no se genera el artefacto."
+          echo "Pruebas fallidas: no se publica la imagen."
           exit 1
         fi
-      - python scripts/build_zip.py
-      # Se descomprime para que el artefacto que publica CodeBuild/CodePipeline
-      # tenga application.py, Procfile y .ebextensions/ en la raíz (listo para Beanstalk).
-      - python -m zipfile -e dist/blacklist-*.zip package/
-      - ls -la package
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - docker push $REPOSITORY_URI:latest
+      # imagedefinitions.json: la etapa Deploy (Amazon ECS) actualiza el contenedor con esta imagen.
+      - printf '[{"name":"blacklist-api","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
 
 reports:
   pytest-reports:
@@ -49,9 +63,8 @@ reports:
     file-format: JUNITXML
 
 artifacts:
-  base-directory: package
   files:
-    - "**/*"
+    - imagedefinitions.json
 
 cache:
   paths:
