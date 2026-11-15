@@ -13,4 +13,4 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "2", "application:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:9000", "--workers", "2", "--threads", "2", "application:application"]
